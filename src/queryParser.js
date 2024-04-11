@@ -1,17 +1,19 @@
 function parseQuery(query) {
-
     query = query.trim();
+    const groupByRegex = /\sGROUP BY\s(.+)/i;
+    const groupByMatch = query.match(groupByRegex);
 
     let selectPart, fromPart;
-
     const whereSplit = query.split(/\sWHERE\s/i);
-    query = whereSplit[0]; 
+    query = whereSplit[0];
 
-    const whereClause = whereSplit.length > 1 ? whereSplit[1].trim() : null;
+    let whereClause = whereSplit.length > 1 ? whereSplit[1].trim() : null;
+    if (whereClause && whereClause.includes('GROUP BY')) {
+        whereClause = whereClause.split(/\sGROUP\sBY\s/i)[0].trim();
+    }
 
     const joinSplit = query.split(/\s(INNER|LEFT|RIGHT) JOIN\s/i);
-    selectPart = joinSplit[0].trim(); 
-
+    selectPart = joinSplit[0].trim();
     const joinPart = joinSplit.length > 1 ? joinSplit[1].trim() : null;
 
     const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
@@ -20,22 +22,35 @@ function parseQuery(query) {
         throw new Error('Invalid SELECT format');
     }
 
-    const [, fields, table] = selectMatch;
-    let joinType ;
-    let joinTable ;
-    let joinCondition ;
+    const [, fields, rawTable] = selectMatch;
 
+    let joinType, joinTable, joinCondition;
     if (joinPart) {
-        ( { joinType, joinTable, joinCondition } = parseJoinClause(query));
-    }else{
-        joinType=null;
-        joinTable=null;
-        joinCondition=null;
+        ({ joinType, joinTable, joinCondition } = parseJoinClause(query));
+    } else {
+        joinType = null;
+        joinTable = null;
+        joinCondition = null;
     }
 
     let whereClauses = [];
     if (whereClause) {
         whereClauses = parseWhereClause(whereClause);
+    }
+
+    const table = groupByMatch ? rawTable.split('GROUP BY')[0].trim() : rawTable.trim();
+
+    const aggregateFunctionRegex = /\b(COUNT|SUM|AVG|MIN|MAX)\(.+?\)/i;
+    const hasAggregateFunction = fields.match(aggregateFunctionRegex);
+
+    let hasAggregateWithoutGroupBy = false;
+    let groupByFields = null;
+    
+    if (groupByMatch) {
+        groupByFields = groupByMatch[1].split(',').map(field => field.trim());
+    }   
+    if (hasAggregateFunction && !groupByMatch) {
+        hasAggregateWithoutGroupBy = true;
     }
 
     return {
@@ -44,7 +59,9 @@ function parseQuery(query) {
         whereClauses,
         joinType,
         joinTable,
-        joinCondition
+        joinCondition,
+        groupByFields,
+        hasAggregateWithoutGroupBy
     };
 }
 
@@ -82,4 +99,4 @@ function parseJoinClause(query) {
     };
 }
 
-module.exports = {parseQuery,parseJoinClause};
+module.exports = { parseQuery, parseJoinClause };

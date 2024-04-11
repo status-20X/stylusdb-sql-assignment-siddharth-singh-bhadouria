@@ -7,7 +7,7 @@ test('Read CSV File', async () => {
     expect(data.length).toBeGreaterThan(0);
     expect(data.length).toBe(4);
     expect(data[0].name).toBe('John');
-    expect(data[0].age).toBe('30'); //ignore the string type here, we will fix this later
+    expect(data[0].age).toBe('30');
 });
 
 test('Parse SQL Query', () => {
@@ -19,7 +19,9 @@ test('Parse SQL Query', () => {
         whereClauses: [],
         joinType:null,
         joinTable:null,
-        joinCondition:null
+        joinCondition:null,
+        groupByFields: null,
+        hasAggregateWithoutGroupBy: false
     });
 });
 
@@ -46,7 +48,9 @@ test('Parse SQL Query with WHERE Clause', () => {
         }],
         joinCondition: null,
        joinTable: null,
-       joinType:null
+       joinType:null,
+       groupByFields: null,
+       hasAggregateWithoutGroupBy: false
     });
 });
 
@@ -76,7 +80,9 @@ test('Parse SQL Query with Multiple WHERE Clauses', () => {
         }],
         joinCondition: null,
        joinTable: null,
-       joinType:null
+       joinType:null,
+       groupByFields: null,
+       hasAggregateWithoutGroupBy: false
     });
 });
 
