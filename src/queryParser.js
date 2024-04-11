@@ -1,9 +1,23 @@
 function parseQuery(query) {
     query = query.trim();
+
+    const orderByRegex = /\sORDER BY\s(.+)/i;
+    const orderByMatch = query.match(orderByRegex);
+
+    let orderByFields = null;
+    if (orderByMatch) {
+        orderByFields = orderByMatch[1].split(',').map(field => {
+            const [fieldName, order] = field.trim().split(/\s+/);
+            return { fieldName, order: order ? order.toUpperCase() : 'ASC' };
+        });
+        query = query.replace(orderByRegex, '');
+    }
+
     const groupByRegex = /\sGROUP BY\s(.+)/i;
     const groupByMatch = query.match(groupByRegex);
 
     let selectPart, fromPart;
+
     const whereSplit = query.split(/\sWHERE\s/i);
     query = whereSplit[0];
 
@@ -24,7 +38,9 @@ function parseQuery(query) {
 
     const [, fields, rawTable] = selectMatch;
 
-    let joinType, joinTable, joinCondition;
+    let joinType;
+    let joinTable;
+    let joinCondition;
     if (joinPart) {
         ({ joinType, joinTable, joinCondition } = parseJoinClause(query));
     } else {
@@ -45,10 +61,10 @@ function parseQuery(query) {
 
     let hasAggregateWithoutGroupBy = false;
     let groupByFields = null;
-    
+
     if (groupByMatch) {
         groupByFields = groupByMatch[1].split(',').map(field => field.trim());
-    }   
+    }
     if (hasAggregateFunction && !groupByMatch) {
         hasAggregateWithoutGroupBy = true;
     }
@@ -61,7 +77,8 @@ function parseQuery(query) {
         joinTable,
         joinCondition,
         groupByFields,
-        hasAggregateWithoutGroupBy
+        hasAggregateWithoutGroupBy,
+        orderByFields
     };
 }
 
