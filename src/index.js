@@ -1,5 +1,5 @@
-const { parseQuery } = require('./queryParser');
-const readCSV = require('./csvReader');
+const { parseSelectQuery, parseINSERTQuery } = require('./queryParser');
+const { readCSV, writeCSV } = require('./csvReader');
 
 function performInnerJoin(data, joinData, joinCondition, fields, table) {
     return data.flatMap(mainRow => {
@@ -31,6 +31,7 @@ function performLeftJoin(data, joinData, joinCondition, fields, table) {
             return [createResultRow(mainRow, null, fields, table, true)];
         }
         return matchedJoinRows.map(joinRow => createResultRow(mainRow, joinRow, fields, table, true));
+
     });
     return leftJoinedData;
 }
@@ -51,7 +52,7 @@ function createResultRow(mainRow, joinRow, fields, table, includeAllMainFields) 
 }
 
 function performRightJoin(data, joinData, joinCondition, fields, table) {
-    const rowStructure = data.length > 0 ? Object.keys(data[0]).reduce((acc, key) => {
+    const RowStructure = data.length > 0 ? Object.keys(data[0]).reduce((acc, key) => {
         acc[key] = null;
         return acc;
     }, {}) : {};
@@ -61,10 +62,10 @@ function performRightJoin(data, joinData, joinCondition, fields, table) {
             const joinValue = getValueFromGivenRow(joinRow, joinCondition.right);
             return mainValue === joinValue;
         });
-        const mainRowToUse = mainRowMatch || rowStructure;
+        const mainRowToUse = mainRowMatch || RowStructure;
         return createResultRow(mainRowToUse, joinRow, fields, table, true);
     });
-    return rightJoinedData;
+    return rightJoinedData
 }
 
 function getValueFromGivenRow(row, compoundFieldName) {
@@ -75,12 +76,12 @@ function getValueFromGivenRow(row, compoundFieldName) {
 function applyGroupBy(data, groupByFields, aggregateFunctions) {
     const groupResult = {};
     data.forEach(row => {
-        const key = groupByFields.map(field => row[field]).join('-');
-        if (!groupResult[key]) {
-            groupResult[key] = { count: 0, sums: {}, mins: {}, maxes: {} };
-            groupByFields.forEach(field => groupResult[key][field] = row[field]);
+        const Key = groupByFields.map(field => row[field]).join('-');
+        if (!groupResult[Key]) {
+            groupResult[Key] = { count: 0, sums: {}, mins: {}, maxes: {} };
+            groupByFields.forEach(field => groupResult[Key][field] = row[field]);
         }
-        groupResult[key].count += 1;
+        groupResult[Key].count += 1;
         aggregateFunctions.forEach(func => {
             const match = /(\w+)\((\w+)\)/.exec(func);
             if (match) {
@@ -88,13 +89,13 @@ function applyGroupBy(data, groupByFields, aggregateFunctions) {
                 const value = parseFloat(row[aggregateField]);
                 switch (aggregateFunc.toUpperCase()) {
                     case 'SUM':
-                        groupResult[key].sums[aggregateField] = (groupResult[key].sums[aggregateField] || 0) + value;
+                        groupResult[Key].sums[aggregateField] = (groupResult[Key].sums[aggregateField] || 0) + value;
                         break;
                     case 'MIN':
-                        groupResult[key].mins[aggregateField] = Math.min(groupResult[key].mins[aggregateField] || value, value);
+                        groupResult[Key].mins[aggregateField] = Math.min(groupResult[Key].mins[aggregateField] || value, value);
                         break;
                     case 'MAX':
-                        groupResult[key].maxes[aggregateField] = Math.max(groupResult[key].maxes[aggregateField] || value, value);
+                        groupResult[Key].maxes[aggregateField] = Math.max(groupResult[Key].maxes[aggregateField] || value, value);
                         break;
                 }
             }
@@ -129,8 +130,9 @@ function applyGroupBy(data, groupByFields, aggregateFunctions) {
 
 async function executeSELECTQuery(query) {
     try {
-        const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit, isDistinct } = parseQuery(query);
+        const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit, isDistinct } = parseSelectQuery(query);
         let data = await readCSV(`${table}.csv`);
+
         if (joinTable && joinCondition) {
             const joinData = await readCSV(`${joinTable}.csv`);
             switch (joinType.toUpperCase()) {
@@ -147,7 +149,11 @@ async function executeSELECTQuery(query) {
                     throw new Error(`Unsupported join type`);
             }
         }
-        let filteredData = whereClauses.length > 0 ? data.filter(row => whereClauses.every(clause => evaluateCondition(row, clause))) : data;
+
+        let filteredData = whereClauses.length > 0
+            ? data.filter(row => whereClauses.every(clause => evaluateCondition(row, clause)))
+            : data;
+
         let groupData = filteredData;
         if (hasAggregateWithoutGroupBy) {
             const output = {};
@@ -176,7 +182,8 @@ async function executeSELECTQuery(query) {
             });
             return [output];
         } else if (groupByFields) {
-            groupData = applyGroupBy(filteredData, groupByFields, fields);
+            groupData = applyGroupBy(filteredData, groupByFields, fields)
+
             let orderOutput = groupData;
             if (orderByFields) {
                 orderOutput = groupData.sort((a, b) => {
@@ -226,6 +233,7 @@ async function executeSELECTQuery(query) {
 
 function evaluateCondition(row, clause) {
     let { field, operator, value } = clause;
+
     if (row[field] === undefined) {
         throw new Error(`Invalid field`);
     }
@@ -260,10 +268,23 @@ function parsingValue(value) {
     return value;
 }
 
-async function func() {
-    const query = 'SELECT DISTINCT student.name FROM student INNER JOIN enrollment ON student.id = enrollment.student_id';
-    const result = await executeSELECTQuery(query);
-    console.log("Result", result);
+async function executeINSERTQuery(query) {
+    const { table, columns, values } = parseINSERTQuery(query);
+    const data = await readCSV(`${table}.csv`);
+
+    const FRow = {};
+    columns.forEach((column, index) => {
+        let value = values[index];
+        if (value.startsWith("'") && value.endsWith("'")) {
+            value = value.substring(1, value.length - 1);
+        }
+        FRow[column] = value;
+    });
+
+    data.push(FRow);
+
+    await writeCSV(`${table}.csv`, data);
+    return { message: "Row inserted successfully." };
 }
-func();
-module.exports = executeSELECTQuery;
+
+module.exports = { executeSELECTQuery, executeINSERTQuery };

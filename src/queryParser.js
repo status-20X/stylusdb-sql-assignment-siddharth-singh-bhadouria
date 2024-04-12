@@ -1,21 +1,25 @@
-function parseQuery(query) {
+function parseSelectQuery(query) {
     try {
         query = query.trim();
+
         const limitRegex = /\sLIMIT\s(\d+)/i;
         const orderByRegex = /\sORDER BY\s(.+)/i;
         const groupByRegex = /\sGROUP BY\s(.+)/i;
         const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
+
         let isDistinct = false;
         if (query.toUpperCase().includes('SELECT DISTINCT')) {
             isDistinct = true;
             query = query.replace('SELECT DISTINCT', 'SELECT');
         }
+
         const limitMatch = query.match(limitRegex);
         let limit = null;
         if (limitMatch) {
             limit = parseInt(limitMatch[1], 10);
             query = query.replace(limitRegex, '');
         }
+
         const orderByMatch = query.match(orderByRegex);
         let orderByFields = null;
         if (orderByMatch) {
@@ -25,6 +29,7 @@ function parseQuery(query) {
             });
             query = query.replace(orderByRegex, '');
         }
+
         const groupByMatch = query.match(groupByRegex);
         let selectPart, fromPart;
         const whereSplit = query.split(/\sWHERE\s/i);
@@ -41,6 +46,7 @@ function parseQuery(query) {
             throw new Error('Invalid SELECT format');
         }
         const [, fields, rawTable] = selectMatch;
+
         let joinType, joinTable, joinCondition;
         if (joinPart) {
             ({ joinType, joinTable, joinCondition } = parseJoinClause(query));
@@ -49,11 +55,14 @@ function parseQuery(query) {
             joinTable = null;
             joinCondition = null;
         }
+
         let whereClauses = [];
         if (whereClause) {
             whereClauses = parseWhereClause(whereClause);
         }
+
         const table = groupByMatch ? rawTable.split('GROUP BY')[0].trim() : rawTable.trim();
+
         const aggregateFunctionRegex = /\b(COUNT|SUM|AVG|MIN|MAX)\(.+?\)/i;
         const hasAggregateFunction = fields.match(aggregateFunctionRegex);
         let hasAggregateWithoutGroupBy = false;
@@ -64,6 +73,7 @@ function parseQuery(query) {
         if (hasAggregateFunction && !groupByMatch) {
             hasAggregateWithoutGroupBy = true;
         }
+
         return {
             fields: fields.split(',').map(field => field.trim()),
             table: table.trim(),
@@ -102,6 +112,7 @@ function parseWhereClause(whereString) {
 function parseJoinClause(query) {
     const joinRegex = /\s(INNER|LEFT|RIGHT) JOIN\s(.+?)\sON\s([\w.]+)\s*=\s*([\w.]+)/i;
     const joinMatch = query.match(joinRegex);
+
     if (joinMatch) {
         return {
             joinType: joinMatch[1].trim(),
@@ -112,6 +123,7 @@ function parseJoinClause(query) {
             }
         };
     }
+
     return {
         joinType: null,
         joinTable: null,
@@ -119,4 +131,22 @@ function parseJoinClause(query) {
     };
 }
 
-module.exports = { parseQuery, parseJoinClause };
+function parseINSERTQuery(query){
+    const insertRegex = /INSERT\s+INTO\s+([^\s\(]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i;
+    const match = query.match(insertRegex)
+
+    if(!match){
+        throw new error("Wrong INSERT INTO syntax")
+    }
+
+    const [, table, columns, values] = match;
+    return {
+        type:'INSERT',
+        table:table.trim(),
+        columns:columns.split(',').map(column => column.trim()),
+        values: values.split(',').map(value => value.trim())
+    }
+}
+
+
+module.exports = { parseSelectQuery, parseJoinClause, parseINSERTQuery };
