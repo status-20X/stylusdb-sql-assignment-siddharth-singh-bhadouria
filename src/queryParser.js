@@ -6,6 +6,11 @@ function parseQuery(query) {
         const orderByRegex = /\sORDER BY\s(.+)/i;
         const groupByRegex = /\sGROUP BY\s(.+)/i;
         const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
+        let isDistinct = false;
+        if (query.toUpperCase().includes('SELECT DISTINCT')) {
+            isDistinct = true;
+            query = query.replace('SELECT DISTINCT', 'SELECT');
+        }
 
         const limitMatch = query.match(limitRegex);
 
@@ -44,7 +49,6 @@ function parseQuery(query) {
         if (!selectMatch) {
             throw new Error('Invalid SELECT format');
         }
-
         const [, fields, rawTable] = selectMatch;
 
         let joinType, joinTable, joinCondition;
@@ -86,7 +90,8 @@ function parseQuery(query) {
             groupByFields,
             hasAggregateWithoutGroupBy,
             orderByFields,
-            limit
+            limit,
+            isDistinct
         };
     } catch (error) {
         throw new Error(`Query parsing error: ${error.message}`);
@@ -127,7 +132,7 @@ function parseJoinClause(query) {
     };
 }
 
-const query = 'SELECT id, name FROM student ORDER BY age DESC LIMIT 2';
+const query = 'SELECT DISTINCT id, name FROM student ORDER BY age DESC LIMIT 2';
 const res = parseQuery(query);
 
 module.exports = { parseQuery, parseJoinClause };
