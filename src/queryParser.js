@@ -1,7 +1,19 @@
 function parseQuery(query) {
     query = query.trim();
 
+    const limitRegex = /\sLIMIT\s(\d+)/i;
     const orderByRegex = /\sORDER BY\s(.+)/i;
+    const groupByRegex = /\sGROUP BY\s(.+)/i;
+    const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
+
+    const limitMatch = query.match(limitRegex);
+
+    let limit = null;
+    if (limitMatch) {
+        limit = parseInt(limitMatch[1]);
+        query = query.replace(limitRegex,'')
+    }
+
     const orderByMatch = query.match(orderByRegex);
 
     let orderByFields = null;
@@ -13,9 +25,8 @@ function parseQuery(query) {
         query = query.replace(orderByRegex, '');
     }
 
-    const groupByRegex = /\sGROUP BY\s(.+)/i;
+    
     const groupByMatch = query.match(groupByRegex);
-
     let selectPart, fromPart;
 
     const whereSplit = query.split(/\sWHERE\s/i);
@@ -28,25 +39,25 @@ function parseQuery(query) {
 
     const joinSplit = query.split(/\s(INNER|LEFT|RIGHT) JOIN\s/i);
     selectPart = joinSplit[0].trim();
+
     const joinPart = joinSplit.length > 1 ? joinSplit[1].trim() : null;
 
-    const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
     const selectMatch = selectPart.match(selectRegex);
     if (!selectMatch) {
         throw new Error('Invalid SELECT format');
     }
 
     const [, fields, rawTable] = selectMatch;
-
-    let joinType;
-    let joinTable;
-    let joinCondition;
+ 
+    let joinType ;
+    let joinTable ;
+    let joinCondition ;
     if (joinPart) {
-        ({ joinType, joinTable, joinCondition } = parseJoinClause(query));
-    } else {
-        joinType = null;
-        joinTable = null;
-        joinCondition = null;
+        ( { joinType, joinTable, joinCondition } = parseJoinClause(query));
+    }else{
+        joinType=null;
+        joinTable=null;
+        joinCondition=null;
     }
 
     let whereClauses = [];
@@ -61,10 +72,10 @@ function parseQuery(query) {
 
     let hasAggregateWithoutGroupBy = false;
     let groupByFields = null;
-
+    
     if (groupByMatch) {
         groupByFields = groupByMatch[1].split(',').map(field => field.trim());
-    }
+    }   
     if (hasAggregateFunction && !groupByMatch) {
         hasAggregateWithoutGroupBy = true;
     }
@@ -78,7 +89,8 @@ function parseQuery(query) {
         joinCondition,
         groupByFields,
         hasAggregateWithoutGroupBy,
-        orderByFields
+        orderByFields,
+        limit
     };
 }
 
@@ -116,4 +128,8 @@ function parseJoinClause(query) {
     };
 }
 
-module.exports = { parseQuery, parseJoinClause };
+const query = 'SELECT id, name FROM student ORDER BY age DESC LIMIT 2';
+const res = parseQuery(query)
+
+
+module.exports = {parseQuery,parseJoinClause};

@@ -131,7 +131,8 @@ function applyGroupBy(data, groupByFields, aggregateFunctions) {
 }
 
 async function executeSELECTQuery(query) {
-    const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields } = parseQuery(query);
+    const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit } = parseQuery(query);
+
     let data = await readCSV(`${table}.csv`);
 
     if (joinTable && joinCondition) {
@@ -151,34 +152,34 @@ async function executeSELECTQuery(query) {
         }
     }
 
-    let filteredData = whereClauses.length > 0
-        ? data.filter(row => whereClauses.every(clause => evaluateCondition(row, clause)))
-        : data;
+    let filteredData = whereClauses.length > 0 ? data.filter(row => whereClauses.every(clause => evaluateCondition(row, clause))) : data;
 
     let groupData = filteredData;
-    if (hasAggregateWithoutGroupBy) {
+    if(hasAggregateWithoutGroupBy){
+        // handling queries where there are no Group by and we are doing Aggregrate
         const output = {};
 
         fields.forEach(field => {
             const match = /(\w+)\((\*|\w+)\)/.exec(field);
             if (match) {
-                const [, aggregateFunc, aggregateField] = match;
-                switch (aggregateFunc.toUpperCase()) {
+                const [, aggregrateFunc, aggregrateField] = match;
+                switch (aggregrateFunc.toUpperCase()) {
                     case 'COUNT':
                         output[field] = filteredData.length;
                         break;
                     case 'SUM':
-                        output[field] = filteredData.reduce((acc, row) => acc + parseFloat(row[aggregateField]), 0);
+                        output[field] = filteredData.reduce((acc, row) => acc + parseFloat(row[aggregrateField]), 0);
                         break;
                     case 'AVG':
-                        output[field] = filteredData.reduce((acc, row) => acc + parseFloat(row[aggregateField]), 0) / filteredData.length;
+                        output[field] = filteredData.reduce((acc, row) => acc + parseFloat(row[aggregrateField]), 0) / filteredData.length;
                         break;
                     case 'MIN':
-                        output[field] = Math.min(...filteredData.map(row => parseFloat(row[aggregateField])));
+                        output[field] = Math.min(...filteredData.map(row => parseFloat(row[aggregrateField])));
                         break;
                     case 'MAX':
-                        output[field] = Math.max(...filteredData.map(row => parseFloat(row[aggregateField])));
+                        output[field] = Math.max(...filteredData.map(row => parseFloat(row[aggregrateField])));
                         break;
+                    // Additional aggregate functions can be handled here
                 }
             }
         });
@@ -188,13 +189,16 @@ async function executeSELECTQuery(query) {
         groupData = applyGroupBy(filteredData, groupByFields, fields);
         let orderOutput = groupData;
         if (orderByFields) {
-            orderOutput = groupData.sort((a, b) => {
+            orderOutput=groupData.sort((a, b) => {
                 for (let { fieldName, order } of orderByFields) {
                     if (a[fieldName] < b[fieldName]) return order === 'ASC' ? -1 : 1;
                     if (a[fieldName] > b[fieldName]) return order === 'ASC' ? 1 : -1;
                 }
                 return 0;
             });
+        }
+        if (limit !== null) {
+            orderOutput = orderOutput.slice(0, limit);
         }
         return groupData;
     } else {
@@ -208,11 +212,15 @@ async function executeSELECTQuery(query) {
                 return 0;
             });
         }
+        if (limit !== null) {
+            orderOutput = orderOutput.slice(0, limit);
+        }
         return orderOutput.map(row => {
             const selectedRow = {};
             fields.forEach(field => {
                 selectedRow[field] = row[field];
             });
+            console.log("final Solution",selectedRow)
             return selectedRow;
         });
     }
@@ -255,7 +263,7 @@ function parsingValue(value) {
     return value;
 }
 
-const query1 = `SELECT name FROM student ORDER BY name ASC`;
-const ret = executeSELECTQuery(query1);
+const query = 'SELECT id, name FROM student LIMIT 0';
+const ret = executeSELECTQuery(query)
 
 module.exports = executeSELECTQuery;
