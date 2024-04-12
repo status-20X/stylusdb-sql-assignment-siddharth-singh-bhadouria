@@ -1,7 +1,6 @@
 const { parseQuery } = require('./queryParser');
 const readCSV = require('./csvReader');
 
-
 function performInnerJoin(data, joinData, joinCondition, fields, table) {
     return data.flatMap(mainRow => {
         const matchedJoinRows = joinData.filter(joinRow => {
@@ -32,7 +31,6 @@ function performLeftJoin(data, joinData, joinCondition, fields, table) {
             return [createResultRow(mainRow, null, fields, table, true)];
         }
         return matchedJoinRows.map(joinRow => createResultRow(mainRow, joinRow, fields, table, true));
-
     });
     return leftJoinedData;
 }
@@ -53,12 +51,7 @@ function createResultRow(mainRow, joinRow, fields, table, includeAllMainFields) 
 }
 
 function performRightJoin(data, joinData, joinCondition, fields, table) {
-    console.log("Inside Right join");
-    console.log("data", data);
-    console.log("Joindata", joinData);
-    console.log("JoinCodnitio", joinCondition);
-    console.log("fields", fields);
-    const RowStructure = data.length > 0 ? Object.keys(data[0]).reduce((acc, key) => {
+    const rowStructure = data.length > 0 ? Object.keys(data[0]).reduce((acc, key) => {
         acc[key] = null;
         return acc;
     }, {}) : {};
@@ -68,10 +61,9 @@ function performRightJoin(data, joinData, joinCondition, fields, table) {
             const joinValue = getValueFromGivenRow(joinRow, joinCondition.right);
             return mainValue === joinValue;
         });
-        const mainRowToUse = mainRowMatch || RowStructure;
+        const mainRowToUse = mainRowMatch || rowStructure;
         return createResultRow(mainRowToUse, joinRow, fields, table, true);
     });
-    console.log("rightJOinedDAta", rightJoinedData);
     return rightJoinedData;
 }
 
@@ -83,12 +75,12 @@ function getValueFromGivenRow(row, compoundFieldName) {
 function applyGroupBy(data, groupByFields, aggregateFunctions) {
     const groupResult = {};
     data.forEach(row => {
-        const Key = groupByFields.map(field => row[field]).join('-');
-        if (!groupResult[Key]) {
-            groupResult[Key] = { count: 0, sums: {}, mins: {}, maxes: {} };
-            groupByFields.forEach(field => groupResult[Key][field] = row[field]);
+        const key = groupByFields.map(field => row[field]).join('-');
+        if (!groupResult[key]) {
+            groupResult[key] = { count: 0, sums: {}, mins: {}, maxes: {} };
+            groupByFields.forEach(field => groupResult[key][field] = row[field]);
         }
-        groupResult[Key].count += 1;
+        groupResult[key].count += 1;
         aggregateFunctions.forEach(func => {
             const match = /(\w+)\((\w+)\)/.exec(func);
             if (match) {
@@ -96,13 +88,13 @@ function applyGroupBy(data, groupByFields, aggregateFunctions) {
                 const value = parseFloat(row[aggregateField]);
                 switch (aggregateFunc.toUpperCase()) {
                     case 'SUM':
-                        groupResult[Key].sums[aggregateField] = (groupResult[Key].sums[aggregateField] || 0) + value;
+                        groupResult[key].sums[aggregateField] = (groupResult[key].sums[aggregateField] || 0) + value;
                         break;
                     case 'MIN':
-                        groupResult[Key].mins[aggregateField] = Math.min(groupResult[Key].mins[aggregateField] || value, value);
+                        groupResult[key].mins[aggregateField] = Math.min(groupResult[key].mins[aggregateField] || value, value);
                         break;
                     case 'MAX':
-                        groupResult[Key].maxes[aggregateField] = Math.max(groupResult[Key].maxes[aggregateField] || value, value);
+                        groupResult[key].maxes[aggregateField] = Math.max(groupResult[key].maxes[aggregateField] || value, value);
                         break;
                 }
             }
@@ -139,7 +131,6 @@ async function executeSELECTQuery(query) {
     try {
         const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit, isDistinct } = parseQuery(query);
         let data = await readCSV(`${table}.csv`);
-
         if (joinTable && joinCondition) {
             const joinData = await readCSV(`${joinTable}.csv`);
             switch (joinType.toUpperCase()) {
@@ -156,9 +147,7 @@ async function executeSELECTQuery(query) {
                     throw new Error(`Unsupported join type`);
             }
         }
-
         let filteredData = whereClauses.length > 0 ? data.filter(row => whereClauses.every(clause => evaluateCondition(row, clause))) : data;
-
         let groupData = filteredData;
         if (hasAggregateWithoutGroupBy) {
             const output = {};
@@ -237,16 +226,16 @@ async function executeSELECTQuery(query) {
 
 function evaluateCondition(row, clause) {
     let { field, operator, value } = clause;
-
     if (row[field] === undefined) {
         throw new Error(`Invalid field`);
     }
-
     const rowValue = parsingValue(row[field]);
     let conditionValue = parsingValue(value);
-    console.log("rowValue",rowValue);
-    console.log("conditionValue",conditionValue);
-
+    if (operator === 'LIKE') {
+        const regexPattern = '^' + value.replace(/%/g, '.*').replace(/_/g, '.') + '$';
+        const regex = new RegExp(regexPattern, 'i');
+        return regex.test(row[field]);
+    }
     switch (operator) {
         case '=': return rowValue === conditionValue;
         case '!=': return rowValue !== conditionValue;
@@ -258,29 +247,23 @@ function evaluateCondition(row, clause) {
     }
 }
 
-
 function parsingValue(value) {
-
     if (value === null || value === undefined) {
         return value;
     }
-
     if (typeof value === 'string' && ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"')))) {
         value = value.substring(1, value.length - 1);
     }
-
     if (!isNaN(value) && value.trim() !== '') {
         return Number(value);
     }
-
     return value;
 }
 
-async function  func() {
+async function func() {
     const query = 'SELECT DISTINCT student.name FROM student INNER JOIN enrollment ON student.id = enrollment.student_id';
     const result = await executeSELECTQuery(query);
-    console.log("Result",result)
+    console.log("Result", result);
 }
-
-func()
+func();
 module.exports = executeSELECTQuery;
