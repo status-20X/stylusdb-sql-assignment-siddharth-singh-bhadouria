@@ -6,14 +6,13 @@ function parseSelectQuery(query) {
         const orderByRegex = /\sORDER BY\s(.+)/i;
         const groupByRegex = /\sGROUP BY\s(.+)/i;
         const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
-
         let isDistinct = false;
         if (query.toUpperCase().includes('SELECT DISTINCT')) {
             isDistinct = true;
             query = query.replace('SELECT DISTINCT', 'SELECT');
         }
-
         const limitMatch = query.match(limitRegex);
+
         let limit = null;
         if (limitMatch) {
             limit = parseInt(limitMatch[1], 10);
@@ -93,7 +92,7 @@ function parseSelectQuery(query) {
 }
 
 function parseWhereClause(whereString) {
-    const conditionRegex = /(.*?)(=|!=|>|<|>=|<=)(.*)/;
+    const conditionRegex = /(.+?)(=|!=|>|<|>=|<=)(.+)/;
     return whereString.split(/ AND | OR /i).map(conditionString => {
         if (conditionString.includes(' LIKE ')) {
             const [field, pattern] = conditionString.split(/\sLIKE\s/i);
@@ -131,22 +130,40 @@ function parseJoinClause(query) {
     };
 }
 
-function parseINSERTQuery(query){
+function parseINSERTQuery(query) {
     const insertRegex = /INSERT\s+INTO\s+([^\s\(]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i;
     const match = query.match(insertRegex)
 
-    if(!match){
+    if (!match) {
         throw new error("Wrong INSERT INTO syntax")
     }
 
     const [, table, columns, values] = match;
     return {
-        type:'INSERT',
-        table:table.trim(),
-        columns:columns.split(',').map(column => column.trim()),
+        type: 'INSERT',
+        table: table.trim(),
+        columns: columns.split(',').map(column => column.trim()),
         values: values.split(',').map(value => value.trim())
     }
 }
 
+function parseDeleteQuery(query) {
+    const deleteRegex = /DELETE FROM (\w+)( WHERE (.*))?/i;
+    const match = query.match(deleteRegex);
+    if (!match) {
+        throw new Error("Wrong DELETE syntax.");
+    }
+    const [, table, , whereString] = match;
+    let whereClauses = [];
+    if (whereString) {
+        whereClauses = parseWhereClause(whereString);
+    }
 
-module.exports = { parseSelectQuery, parseJoinClause, parseINSERTQuery };
+    return {
+        type: 'DELETE',
+        table: table.trim(),
+        whereClauses
+    };
+}
+
+module.exports = { parseSelectQuery, parseJoinClause, parseINSERTQuery, parseDeleteQuery };
